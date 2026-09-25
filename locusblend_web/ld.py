@@ -13,11 +13,12 @@ from io import BytesIO
 import numpy as np
 import pandas as pd
 
-from locusblend_web.config import BIN_DIR
+from locusblend_web.config import BIN_DIR, INTERNAL_1000G_DEFAULT_ANCESTRY
 from locusblend_web.references import (
     _find_plink_exec,
     _resolve_bfile_prefix,
     normalize_chrom,
+    normalize_internal_1000g_ancestry,
 )
 from locusblend_web.variants import chrom_mask, dedup_columns
 
@@ -594,3 +595,29 @@ def merge_ld_annot(df, ld_annot):
     out = base.merge(ld_annot, on="REF_SNP", how="left")
     out["in_ref"] = out["in_ref"].fillna(False).astype(bool)
     return dedup_columns(out)
+
+
+def get_ld_reference_labels(active_ld_source, ancestry=INTERNAL_1000G_DEFAULT_ANCESTRY):
+    """Return tooltip/caption labels keyed to the currently active LD source.
+
+    The downstream builders never hard-code the reference name; they read
+    from this dict so the same plot machinery serves the 1000G mode and the
+    two uploaded-LD modes.
+    """
+    if active_ld_source == "Use internal 1000G reference":
+        ancestry = normalize_internal_1000g_ancestry(ancestry)
+        source_name = f"1000G {ancestry} LD"
+        return {
+            "source_name": source_name,
+            "in_ref": f"reference: in {source_name}",
+            "not_in_ref": f"reference: not found in {source_name}",
+            "index_not_found": f"Index SNP not found in {source_name}",
+            "summary_label": f"1000G {ancestry} window SNPs",
+        }
+    return {
+        "source_name": "user uploaded LD",
+        "in_ref": "reference: in user uploaded LD",
+        "not_in_ref": "reference: not found in user uploaded LD",
+        "index_not_found": "Index SNP not found in user uploaded LD",
+        "summary_label": "Uploaded LD SNPs",
+    }

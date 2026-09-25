@@ -140,3 +140,61 @@ def _find_plink_exec(plink_path=str(BIN_DIR / "plink")):
         if c and (os.path.exists(c) or shutil.which(c)):
             return c
     raise FileNotFoundError("PLINK executable not found. Please install plink first.")
+
+
+def is_supported_chrom(chrom):
+    """Return True for chromosomes supported by the visualizer."""
+    return normalize_chrom(chrom) in get_supported_chromosomes()
+
+
+def get_supported_chromosomes():
+    """Return supported autosomes plus chromosome X."""
+    return [str(i) for i in range(1, 23)] + ["X"]
+
+
+def chrom_sort_key(chrom):
+    """Sort chromosomes 1-22 numerically, then X."""
+    c = normalize_chrom(chrom)
+    if c == "X":
+        return 23
+    try:
+        return int(c)
+    except (TypeError, ValueError):
+        return 10_000
+
+
+def format_chrom_label(chrom):
+    """Return display label such as chr14 or chrX."""
+    c = normalize_chrom(chrom)
+    return f"chr{c}" if c else "chr"
+
+
+def format_internal_1000g_ancestry_option(ancestry):
+    ancestry = normalize_internal_1000g_ancestry(ancestry)
+    label = INTERNAL_1000G_ANCESTRIES[ancestry].split(" / ", 1)[0]
+    return f"{ancestry} - {label}"
+
+
+def get_internal_bfile_prefix_for_chrom(chrom, ancestry=INTERNAL_1000G_DEFAULT_ANCESTRY):
+    """Build the chromosome-specific PLINK bfile prefix and verify all three
+    files (.bed, .bim, .fam) exist."""
+    chrom = normalize_chrom(chrom)
+    ancestry = normalize_internal_1000g_ancestry(ancestry)
+    prefix = str(get_internal_1000g_prefix(chrom, ancestry))
+    missing = []
+    for suf in [".bed", ".bim", ".fam"]:
+        if not os.path.exists(prefix + suf):
+            missing.append(prefix + suf)
+    if missing:
+        if chrom == "X":
+            message = (
+                f"Internal 1000G {ancestry} reference files for chromosome X were not found. "
+                "Select an ancestry with chrX support or upload your own LD reference."
+            )
+        else:
+            message = f"Internal 1000G {ancestry} reference files for chromosome {chrom} were not found."
+        raise FileNotFoundError(
+            message + "\n" +
+            "\n".join(f"  {m}" for m in missing)
+        )
+    return prefix

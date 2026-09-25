@@ -15,14 +15,19 @@ from locusblend_web.config import (
     BIN_DIR,
     COLOR_MAPPING,
     DATA_DIR,
-    INTERNAL_1000G_ANCESTRIES,
     INTERNAL_1000G_ANCESTRY_OPTIONS,
     INTERNAL_1000G_DEFAULT_ANCESTRY,
 )
 
 from locusblend_web.references import (
+    chrom_sort_key,
+    format_chrom_label,
+    format_internal_1000g_ancestry_option,
+    get_internal_bfile_prefix_for_chrom,
     get_gtf_path_for_chrom,
     get_internal_1000g_prefix,
+    get_supported_chromosomes,
+    is_supported_chrom,
     normalize_chrom,
     normalize_internal_1000g_ancestry,
 )
@@ -50,6 +55,7 @@ from locusblend_web.ld import (
     compute_ld_maps_from_uploaded_long,
     compute_ld_maps_from_uploaded_matrix,
     greedy_clump_uploaded_ld_for_auto_indices,
+    get_ld_reference_labels,
     merge_ld_annot,
     parse_uploaded_ld_long,
     parse_uploaded_ld_matrix,
@@ -65,6 +71,7 @@ from locusblend_web.plotting import (
     build_compare_figure_triptych,
     build_single_blended_locuscompare,
     format_chrom_axis_title,
+    get_locus_compare_plotly_config,
     get_plotly_locus_py,
 )
 
@@ -530,64 +537,6 @@ def read_uploaded_ld_matrix(file_bytes, file_name):
     return parse_uploaded_ld_matrix(file_bytes, file_name)
 
 
-def is_supported_chrom(chrom):
-    """Return True for chromosomes supported by the visualizer."""
-    return normalize_chrom(chrom) in get_supported_chromosomes()
-
-
-def get_supported_chromosomes():
-    """Return supported autosomes plus chromosome X."""
-    return [str(i) for i in range(1, 23)] + ["X"]
-
-
-def chrom_sort_key(chrom):
-    """Sort chromosomes 1-22 numerically, then X."""
-    c = normalize_chrom(chrom)
-    if c == "X":
-        return 23
-    try:
-        return int(c)
-    except (TypeError, ValueError):
-        return 10_000
-
-
-def format_chrom_label(chrom):
-    """Return display label such as chr14 or chrX."""
-    c = normalize_chrom(chrom)
-    return f"chr{c}" if c else "chr"
-
-
-def format_internal_1000g_ancestry_option(ancestry):
-    ancestry = normalize_internal_1000g_ancestry(ancestry)
-    label = INTERNAL_1000G_ANCESTRIES[ancestry].split(" / ", 1)[0]
-    return f"{ancestry} - {label}"
-
-
-def get_internal_bfile_prefix_for_chrom(chrom, ancestry=INTERNAL_1000G_DEFAULT_ANCESTRY):
-    """Build the chromosome-specific PLINK bfile prefix and verify all three
-    files (.bed, .bim, .fam) exist."""
-    chrom = normalize_chrom(chrom)
-    ancestry = normalize_internal_1000g_ancestry(ancestry)
-    prefix = str(get_internal_1000g_prefix(chrom, ancestry))
-    missing = []
-    for suf in [".bed", ".bim", ".fam"]:
-        if not os.path.exists(prefix + suf):
-            missing.append(prefix + suf)
-    if missing:
-        if chrom == "X":
-            message = (
-                f"Internal 1000G {ancestry} reference files for chromosome X were not found. "
-                "Select an ancestry with chrX support or upload your own LD reference."
-            )
-        else:
-            message = f"Internal 1000G {ancestry} reference files for chromosome {chrom} were not found."
-        raise FileNotFoundError(
-            message + "\n" +
-            "\n".join(f"  {m}" for m in missing)
-        )
-    return prefix
-
-
 def get_required_n_indices(active_mode):
     """Return the number of index variants required by the active mode."""
     if active_mode == "Standard locus zoom":
@@ -711,49 +660,6 @@ def load_genes_from_table(chrom, start, end, parquet_path, gene_display_mode="pr
 @st.cache_data(show_spinner=False)
 def load_genes_from_gtf(gtf_path, chrom, start, end, gene_display_mode="protein_coding", chunksize=200000):
     return read_genes_from_gtf(gtf_path, chrom, start, end, gene_display_mode, chunksize)
-
-
-def get_ld_reference_labels(active_ld_source, ancestry=INTERNAL_1000G_DEFAULT_ANCESTRY):
-    """Return tooltip/caption labels keyed to the currently active LD source.
-
-    The downstream builders never hard-code the reference name; they read
-    from this dict so the same plot machinery serves the 1000G mode and the
-    two uploaded-LD modes.
-    """
-    if active_ld_source == "Use internal 1000G reference":
-        ancestry = normalize_internal_1000g_ancestry(ancestry)
-        source_name = f"1000G {ancestry} LD"
-        return {
-            "source_name": source_name,
-            "in_ref": f"reference: in {source_name}",
-            "not_in_ref": f"reference: not found in {source_name}",
-            "index_not_found": f"Index SNP not found in {source_name}",
-            "summary_label": f"1000G {ancestry} window SNPs",
-        }
-    return {
-        "source_name": "user uploaded LD",
-        "in_ref": "reference: in user uploaded LD",
-        "not_in_ref": "reference: not found in user uploaded LD",
-        "index_not_found": "Index SNP not found in user uploaded LD",
-        "summary_label": "Uploaded LD SNPs",
-    }
-
-
-def get_locus_compare_plotly_config(base_config=None):
-    """Return Plotly config for locus compare charts.
-
-    Removes Reset axes because safe autoscale is the intended recovery
-    behavior for compare plots. Autoscale should remain available.
-    """
-    cfg = dict(base_config or {})
-    remove = list(cfg.get("modeBarButtonsToRemove", []))
-
-    for button_name in ["resetScale2d"]:
-        if button_name not in remove:
-            remove.append(button_name)
-
-    cfg["modeBarButtonsToRemove"] = remove
-    return cfg
 
 
 def make_locusblend_export_bytes(

@@ -1235,3 +1235,20 @@ def apply_locus_compare_safe_autoscale(fig, pad_frac=0.12):
         fig.update_yaxes(range=y_range, autorange=False)
 
     return fig
+
+
+def get_locus_compare_plotly_config(base_config=None):
+    """Return Plotly config for locus compare charts.
+
+    Removes Reset axes because safe autoscale is the intended recovery
+    behavior for compare plots. Autoscale should remain available.
+    """
+    cfg = dict(base_config or {})
+    remove = list(cfg.get("modeBarButtonsToRemove", []))
+
+    for button_name in ["resetScale2d"]:
+        if button_name not in remove:
+            remove.append(button_name)
+
+    cfg["modeBarButtonsToRemove"] = remove
+    return cfg
