@@ -10,14 +10,12 @@ import streamlit as st
 
 from locusblend_web.config import (
     BIN_DIR,
-    COLOR_MAPPING,
     DATA_DIR,
     INTERNAL_1000G_ANCESTRY_OPTIONS,
     INTERNAL_1000G_DEFAULT_ANCESTRY,
 )
 
 from locusblend_web.references import (
-    chrom_sort_key,
     format_chrom_label,
     format_internal_1000g_ancestry_option,
     get_internal_bfile_prefix_for_chrom,
@@ -33,14 +31,11 @@ from locusblend_web.variants import (
     attach_reference_snp_two_pass,
     attach_uploaded_ld_keys,
     chrom_mask,
-    dedup_columns,
     resolve_index_variant_from_input,
 )
 
 from locusblend_web.genes import (
-    assign_gene_rows,
     filter_genes_from_table,
-    get_attr,
     read_gene_table,
     read_genes_from_gtf,
 )
