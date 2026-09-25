@@ -29,7 +29,7 @@ DATA_DIR = APP_DIR / "data"
 BIN_DIR = APP_DIR / "bin"
 ASSET_DIR = APP_DIR / "assets"
 DISABLE_WELCOME_DIALOG = True
-# app.2.7.py: chromosome X / 23 support.
+# Chromosome X / 23 support.
 
 INTERNAL_1000G_ANCESTRIES = {
     "AFR": "African / African ancestry",
@@ -135,10 +135,10 @@ def _clean_locus_df(df, source_name="uploaded data"):
         lambda x: str(x).replace("\ufeff", "").strip()
     )
 
-    # 保存原始列名信息，方便调试
+    # Keep the original column names for debugging.
     original_cols = list(df.columns)
 
-    # 建一个不区分大小写的查找表
+    # Build a case-insensitive lookup table.
     lower_to_actual = {}
     for c in df.columns:
         cl = str(c).strip().lower()
@@ -174,7 +174,7 @@ def _clean_locus_df(df, source_name="uploaded data"):
         rename_map[c] = "rsid"
 
     # ---------- alleles ----------
-    # 你的这份数据里就是 ALLELE1 / ALLELE0
+    # This dataset uses ALLELE1 / ALLELE0.
     c = pick("A1", "a1", "EA", "ea", "effect_allele", "effect allele", "ALLELE1", "allele1")
     if c and c != "A1":
         rename_map[c] = "A1"
@@ -246,11 +246,11 @@ def _clean_locus_df(df, source_name="uploaded data"):
         raise ValueError(f"{source_name} missing columns: {missing}")
 
     # ---------- optional helper column ----------
-    # 如果没有 posID，就自动补一个 chr:bp
+    # Build a CHR:BP posID when it is missing.
     if "posID" not in df.columns:
         df["posID"] = df["CHR"].astype(str) + ":" + df["BP"].astype("Int64").astype(str)
 
-    # 你后面做 uniqueid 匹配时会用到
+    # Used later for uniqueid matching.
     if "uniqueid" not in df.columns:
         df["uniqueid"] = (
             df["CHR"].astype(str)
@@ -1371,7 +1371,7 @@ def attach_reference_snp_two_pass(df, bim_ref):
     out["A1"] = norm_allele(out["A1"])
     out["A2"] = norm_allele(out["A2"])
 
-    # 用 Int64 防止 NA 时直接崩
+    # Use Int64 so NA values do not crash the pipeline.
     out["BP"] = out["BP"].astype("Int64")
 
     # ---------- build QUERY_UID on df ----------
@@ -1390,7 +1390,7 @@ def attach_reference_snp_two_pass(df, bim_ref):
     )
 
     # ---------- normalize bim_ref ----------
-    # 兼容常见 BIM 列名
+    # Accept common BIM column names.
     rename_map = {}
     if "#CHROM" in ref.columns and "CHR" not in ref.columns:
         rename_map["#CHROM"] = "CHR"
@@ -1421,7 +1421,7 @@ def attach_reference_snp_two_pass(df, bim_ref):
     ref["A1"] = norm_allele(ref["A1"])
     ref["A2"] = norm_allele(ref["A2"])
 
-    # BIM 里的 SNP 名
+    # SNP name from the BIM file.
     if "SNP" not in ref.columns:
         ref["SNP"] = (
             ref["CHR"].astype(str) + ":"
@@ -1430,7 +1430,7 @@ def attach_reference_snp_two_pass(df, bim_ref):
             + ref["A2"].astype(str)
         )
 
-    # 正向 UID
+    # Forward UID.
     ref["REF_UID"] = (
         ref["CHR"].astype(str) + ":"
         + ref["BP"].astype(str) + ":"
@@ -1438,7 +1438,7 @@ def attach_reference_snp_two_pass(df, bim_ref):
         + ref["A2"].astype(str)
     )
 
-    # 反向 UID
+    # Reverse UID.
     ref["REF_UID_FLIP"] = (
         ref["CHR"].astype(str) + ":"
         + ref["BP"].astype(str) + ":"
@@ -1522,12 +1522,12 @@ def resolve_index_variant_from_input(df_top_ref, df_bottom_ref, user_text):
     def prep(df, source_label):
         x = df.copy()
 
-        # 保证一些常见列存在时先转成字符串
+        # Cast common columns to string when present.
         for col in ["DISPLAY_ID", "rsid", "SNP", "REF_MATCH", "uniqueid", "QUERY_UID"]:
             if col in x.columns:
                 x[col] = x[col].astype(str).str.strip()
 
-        # 如果没有 uniqueid，就现建一个
+        # Build a uniqueid when it is missing.
         if "uniqueid" not in x.columns and all(c in x.columns for c in ["CHR", "BP", "A1", "A2"]):
             x["uniqueid"] = (
                 x["CHR"].map(normalize_chrom)
@@ -1539,7 +1539,7 @@ def resolve_index_variant_from_input(df_top_ref, df_bottom_ref, user_text):
                 + x["A2"].astype(str).str.strip().str.upper()
             )
 
-        # 自动生成 DISPLAY_ID
+        # Generate DISPLAY_ID automatically.
         if "DISPLAY_ID" not in x.columns:
             if "rsid" in x.columns:
                 x["DISPLAY_ID"] = x["rsid"]
@@ -1561,24 +1561,24 @@ def resolve_index_variant_from_input(df_top_ref, df_bottom_ref, user_text):
     bottom = prep(df_bottom_ref, "bottom")
     merged = pd.concat([top, bottom], axis=0, ignore_index=True, sort=False)
 
-    # 统一去空格
+    # Strip whitespace consistently.
     for col in ["DISPLAY_ID", "rsid", "SNP", "REF_MATCH", "uniqueid", "QUERY_UID"]:
         if col in merged.columns:
             merged[col] = merged[col].astype(str).str.strip()
 
-    # 依次尝试匹配
+    # Try each candidate column in order.
     search_cols = ["DISPLAY_ID", "rsid", "SNP", "REF_MATCH", "uniqueid", "QUERY_UID"]
 
     for col in search_cols:
         if col in merged.columns:
             hit = merged[merged[col].astype(str) == user_text].copy()
             if len(hit) > 0:
-                # 优先 top，再 bottom；也可以改成别的规则
+                # Prefer top, then bottom; this rule can be changed.
                 hit["_priority"] = hit["SOURCE"].map({"top": 0, "bottom": 1}).fillna(9)
                 hit = hit.sort_values(["_priority"]).drop(columns=["_priority"])
                 return hit.iloc[0]
 
-    # 再做一次不区分大小写匹配（主要给 rsid / SNP 用）
+    # Then match case-insensitively again (mainly for rsid / SNP).
     user_upper = user_text.upper()
     for col in search_cols:
         if col in merged.columns:
@@ -2077,7 +2077,7 @@ def build_compare_data(df_top, df_bottom, signal, idx1_label, idx2_label, idx3_l
         columns={"DISPLAY_ID": "DISPLAY_ID_bottom", "P": "P_bottom", "in_ref": "in_ref_bottom", "REF_SNP": "REF_SNP_bottom"}
     )
 
-    # 优先用 REF_SNP 做内部对齐；没有时退回 position key
+    # Prefer REF_SNP for internal alignment; fall back to the position key.
     top["MERGE_KEY"] = np.where(
         top["REF_SNP_top"].notna(),
         top["REF_SNP_top"].astype(str),
@@ -3038,9 +3038,9 @@ def get_plotly_locus_py(
 
     colored["fill_hex"] = colored["group_code"].map(COLOR_MAPPING).fillna("#bfbfbf")
 
-    # 这里控制普通 colored 点大小
-    # 非 index SNP 若与某个 index 完全 LD (r2=1)，会正常变大
-    # index SNP 自己不会因为 self-LD=1 变得过大
+    # Marker size for regular colored points.
+    # Non-index SNPs in full LD with an index (r2=1) still grow normally.
+    # Index SNPs do not grow oversized from their own self-LD=1.
     colored["size"] = np.clip(2 + 10 * colored["max_r_size"].fillna(0), 4, 12)
 
     grey["size"] = 4
@@ -3444,7 +3444,7 @@ def inject_locusblend_css():
             color: #111827 !important;
         }
 
-        /* --- LocusBlend 2.3.2: force buttons and number steppers to light mode --- */
+        /* --- Force buttons and number steppers to light mode --- */
 
         /* Normal Streamlit buttons */
         [data-testid="stButton"] button,
@@ -3649,7 +3649,7 @@ def inject_locusblend_css():
             }
         }
 
-        /* --- LocusBlend 2.3.3: exact Streamlit 1.50+ stBaseButton override --- */
+        /* --- Exact Streamlit 1.50+ stBaseButton override --- */
 
         /* Exact Streamlit button selectors observed in Chrome DevTools.
            Do not target st-emotion-cache-* classes because they are generated. */
@@ -3905,7 +3905,7 @@ def inject_locusblend_css():
             color: #111827 !important;
         }
 
-        /* --- LocusBlend 2.3.4: export button and checkbox repair --- */
+        /* --- Export button and checkbox repair --- */
 
         /* Repair normal/secondary Streamlit buttons, including Prepare export file. */
         button[data-testid="stBaseButton-secondary"],
@@ -4032,7 +4032,7 @@ def inject_locusblend_css():
             color: #111827 !important;
         }
 
-        /* --- LocusBlend 2.4.1: markdown code and documentation readability --- */
+        /* --- Markdown code and documentation readability --- */
 
         /* Inline markdown code: prevent black background / green text in browser dark mode. */
         [data-testid="stMarkdownContainer"] code,
@@ -4084,7 +4084,7 @@ def inject_locusblend_css():
             color-scheme: light !important;
         }
 
-        /* --- LocusBlend 2.4.1: compact sidebar sections --- */
+        /* --- Compact sidebar sections --- */
 
         /* Reduce sidebar inner padding and vertical gaps. */
         [data-testid="stSidebar"] [data-testid="stSidebarContent"] {
@@ -4140,7 +4140,7 @@ def inject_locusblend_css():
             margin-bottom: 0.35rem !important;
         }
 
-        /* --- LocusBlend 2.5.1: checkbox and uploader control visibility --- */
+        /* --- Checkbox and uploader control visibility --- */
 
         /* Make Streamlit/BaseWeb checkbox boxes and ticks visible in forced light mode. */
         [data-testid="stCheckbox"] [data-baseweb="checkbox"] > div,
@@ -4231,7 +4231,7 @@ def inject_locusblend_css():
             stroke: #111827 !important;
         }
 
-        /* --- LocusBlend 2.5.2: final uploaded-file remove-control fix --- */
+        /* --- Uploaded-file remove-control fix --- */
 
         /* Uploaded file row containers. */
         [data-testid="stFileUploader"] [data-testid="stFileUploaderFile"],
@@ -4352,7 +4352,7 @@ def inject_locusblend_css():
 
         /* If this still fails, inspect the dark control in DevTools and add its stable data-testid or aria-label selector. Avoid st-emotion-cache-* classes. */
 
-        /* --- LocusBlend 2.5.3: uploaded-file internal scrollbar fix --- */
+        /* --- Uploaded-file internal scrollbar fix --- */
 
         /* The remaining black vertical pill in uploaded-file rows is likely an
         internal scrollbar thumb, not a button. Keep this scoped to file uploader. */
@@ -4430,7 +4430,7 @@ def inject_locusblend_css():
             color-scheme: light !important;
         }
 
-        /* --- LocusBlend 2.5.4: exact uploaded-file delete button fix --- */
+        /* --- Uploaded-file delete button fix --- */
 
         /* DevTools-confirmed target:
         div[data-testid="stFileUploaderDeleteBtn"]
@@ -4535,7 +4535,7 @@ def inject_locusblend_css():
             text-shadow: none !important;
         }
 
-        /* --- LocusBlend 2.6: WashU Medicine header --- */
+        /* --- WashU Medicine header --- */
 
         .lb-washu-header {
             width: 100%;
@@ -4588,7 +4588,7 @@ def inject_locusblend_css():
             }
         }
 
-        /* --- LocusBlend 2.6.1: full-width fixed WashU Medicine header --- */
+        /* --- Full-width fixed WashU Medicine header --- */
 
         :root {
             --lb-washu-header-height: 54px;
@@ -4663,7 +4663,7 @@ def inject_locusblend_css():
             letter-spacing: 0.01em !important;
         }
 
-        /* Hide/neutralize old non-fixed 2.6 header container if still rendered. */
+        /* Hide/neutralize the legacy non-fixed header container if still rendered. */
         .lb-washu-header {
             display: none !important;
         }
@@ -4721,7 +4721,7 @@ def inject_locusblend_css():
             }
         }
 
-        /* --- LocusBlend 2.6.3: keep sidebar expanded for review/demo --- */
+        /* --- Keep sidebar expanded for review/demo --- */
 
         /* Do not attempt to restyle Streamlit's collapsed/reopen button.
         For this review build, prevent users from collapsing the sidebar.
@@ -4742,10 +4742,10 @@ def inject_locusblend_css():
             opacity: 1 !important;
         }
 
-        /* Preserve the app-wide WashU header from app.2.6.1.
+        /* Preserve the app-wide WashU header.
         Do not touch native sidebar reopen controls here. */
 
-        /* --- LocusBlend 2.6.4: remove empty sidebar header gap --- */
+        /* --- Remove empty sidebar header gap --- */
 
         /* In this review/demo build, the sidebar collapse button is intentionally hidden.
         Streamlit's sidebar header container then becomes empty but still occupies
@@ -4759,7 +4759,7 @@ def inject_locusblend_css():
             overflow: hidden !important;
         }
 
-        /* Keep the actual collapse button hidden, as in app.2.6.3. */
+        /* Keep the actual collapse button hidden. */
         [data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"],
         [data-testid="stSidebar"] [data-testid="stSidebarHeader"] [data-testid="stSidebarCollapseButton"] {
             display: none !important;
@@ -4769,7 +4769,7 @@ def inject_locusblend_css():
 
         /* Do not change the global WashU header or Streamlit main/header layers here. */
 
-        /* --- LocusBlend 2.6.5: sidebar app title --- */
+        /* --- Sidebar app title --- */
 
         /* Keep the native Streamlit sidebar collapse mechanics untouched here.
            This build adds an app-level sidebar title instead of trying to restyle
@@ -4812,7 +4812,7 @@ def inject_locusblend_css():
             padding-top: 0.75rem !important;
         }
 
-        /* Keep the empty Streamlit sidebar header compact as in app.2.6.4. */
+        /* Keep the empty Streamlit sidebar header compact. */
         [data-testid="stSidebar"] [data-testid="stSidebarHeader"] {
             height: 0 !important;
             min-height: 0 !important;
@@ -4830,9 +4830,9 @@ def inject_locusblend_css():
             pointer-events: none !important;
         }
 
-        /* --- LocusBlend 2.6.6: cleaner sidebar top label --- */
+        /* --- Cleaner sidebar top label --- */
 
-        /* Replace the heavy sidebar title card from 2.6.5 with a compact label. */
+        /* Use a compact label instead of a heavy sidebar title card. */
         .lb-sidebar-app-header {
             display: none !important;
         }
@@ -4880,7 +4880,7 @@ def inject_locusblend_css():
             pointer-events: none !important;
         }
 
-        /* --- LocusBlend 2.6.7: top update button hint --- */
+        /* --- Top update button hint --- */
 
         .lb-sidebar-update-hint {
             margin: 0.25rem 0 0.9rem 0 !important;
@@ -4890,7 +4890,7 @@ def inject_locusblend_css():
             color: #6b7280 !important;
         }
 
-        /* --- LocusBlend 2.6.10: top-level Visualizer / Documentation switcher --- */
+        /* --- Top-level Visualizer / Documentation switcher --- */
 
         [data-testid="stRadio"] {
             color-scheme: light !important;
