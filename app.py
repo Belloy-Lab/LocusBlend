@@ -28,7 +28,6 @@ APP_DIR = Path(__file__).resolve().parent
 DATA_DIR = APP_DIR / "data"
 BIN_DIR = APP_DIR / "bin"
 ASSET_DIR = APP_DIR / "assets"
-DISABLE_WELCOME_DIALOG = True
 # Chromosome X / 23 support.
 
 INTERNAL_1000G_ANCESTRIES = {
@@ -719,7 +718,6 @@ def read_uploaded_ld_long(file_bytes, file_name):
                    self-pair rows where SNP_A == SNP_B and R2 == 1.
     Raises ValueError if required columns or self-pair rows are missing.
     """
-    from io import BytesIO
     raw = BytesIO(file_bytes)
     name = (file_name or "").lower()
     if name.endswith((".tsv", ".tab", ".txt", ".ld")):
@@ -773,7 +771,6 @@ def read_uploaded_ld_matrix(file_bytes, file_name):
     column SNP IDs, cells = R^2. Returns the matrix as a DataFrame with
     SNP IDs on both axes, plus a tuple ld_universe = sorted(rows | cols).
     """
-    from io import BytesIO
     raw = BytesIO(file_bytes)
     name = (file_name or "").lower()
     if name.endswith((".tsv", ".tab", ".txt", ".ld")):
@@ -795,18 +792,6 @@ def read_uploaded_ld_matrix(file_bytes, file_name):
 
     ld_universe = tuple(sorted(set(row_ids) | set(col_ids)))
     return df, ld_universe
-
-
-def _norm_chr(chrom):
-    return normalize_chrom(chrom)
-
-
-def _normalize_chrom_legacy_autosome_only(chrom):
-    """Return chromosome as a clean string without 'chr' prefix.
-
-    Examples: 'chr14' → '14', '14' → '14', 14 → '14'
-    """
-    return str(chrom).replace("chr", "").strip()
 
 
 def normalize_chrom(chrom):
@@ -1311,23 +1296,6 @@ def load_reference_bim(bfile_prefix):
     bim["A2"] = bim["A2"].astype(str).str.upper()
     bim["SNP"] = bim["SNP"].astype(str)
     bim = bim.dropna(subset=["BP"]).copy()
-    return bim
-
-
-def build_bim_uid_table(bim):
-    bim = dedup_columns(bim).copy()
-    bim["CHR"] = bim["CHR"].map(normalize_chrom)
-    bim["BP"] = pd.to_numeric(bim["BP"], errors="coerce")
-    bim["A1"] = bim["A1"].astype(str).str.upper()
-    bim["A2"] = bim["A2"].astype(str).str.upper()
-    bim["SNP"] = bim["SNP"].astype(str)
-
-    bim["UID"] = (
-        bim["CHR"].astype(str) + ":" +
-        bim["BP"].astype("Int64").astype(str) + ":" +
-        bim["A1"].astype(str) + ":" +
-        bim["A2"].astype(str)
-    )
     return bim
 
 
@@ -2106,178 +2074,6 @@ def build_compare_data(df_top, df_bottom, signal, idx1_label, idx2_label, idx3_l
     merged["logP_bottom"] = -np.log10(merged["P_bottom"])
     merged["size"] = np.maximum(8, 4 + 12 * merged["r2_use"].fillna(0))
     return merged, info
-
-
-def build_compare_figure(df_top, df_bottom, signal, idx1_label, idx2_label, idx3_label, title_top, title_bottom, compare_size, ld_labels):
-    merged, info = build_compare_data(df_top, df_bottom, signal, idx1_label, idx2_label, idx3_label)
-
-    if merged.empty:
-        fig = go.Figure()
-        fig.update_layout(width=compare_size, height=compare_size, title=f"Locus compare ({signal})")
-        return fig, 0
-
-    missing_ref = merged[~merged["in_ref"]].copy()
-    grey = merged[merged["in_ref"] & ((merged["r2_use"] < 0.2) | (merged["r2_use"].isna()))].copy()
-    colored = merged[merged["in_ref"] & (merged["r2_use"] >= 0.2)].copy()
-
-    def tooltip_text(r):
-        r2_text = "NA" if pd.isna(r["r2_use"]) else f"{r['r2_use']:.3f}"
-        ref_text = ld_labels["in_ref"] if bool(r["in_ref"]) else ld_labels["not_in_ref"]
-        label = r["DISPLAY_ID_top"] if pd.notna(r["DISPLAY_ID_top"]) else r["MERGE_KEY"]
-        return (
-            f"SNP: {label}"
-            f"<br>-log10(P top): {r['logP_top']:.3f}"
-            f"<br>-log10(P bottom): {r['logP_bottom']:.3f}"
-            f"<br>r2: {r2_text}"
-            f"<br>{ref_text}"
-        )
-
-    if not missing_ref.empty:
-        missing_ref["tooltip"] = [tooltip_text(r) for _, r in missing_ref.iterrows()]
-    if not grey.empty:
-        grey["tooltip"] = [tooltip_text(r) for _, r in grey.iterrows()]
-    if not colored.empty:
-        colored["tooltip"] = [tooltip_text(r) for _, r in colored.iterrows()]
-
-    fig = go.Figure()
-
-    # 1) missing_ref (x) first
-    if not missing_ref.empty:
-        fig.add_trace(
-            go.Scattergl(
-                x=missing_ref["logP_top"],
-                y=missing_ref["logP_bottom"],
-                mode="markers",
-                marker=dict(
-                    symbol="x",
-                    color="#d9d9d9",
-                    size=4,
-                    line=dict(width=0),
-                    opacity=0.6,
-                ),
-                text=missing_ref["tooltip"],
-                hovertemplate="%{text}<extra></extra>",
-                showlegend=False,
-            )
-        )
-
-    # 2) grey points
-    if not grey.empty:
-        fig.add_trace(
-            go.Scattergl(
-                x=grey["logP_top"],
-                y=grey["logP_bottom"],
-                mode="markers",
-                marker=dict(
-                    symbol="circle",
-                    color="#FFFFFF",
-                    line=dict(color="#3c3c3c", width=1),
-                    opacity=0.25,
-                    size=8,
-                ),
-                text=grey["tooltip"],
-                hovertemplate="%{text}<extra></extra>",
-                showlegend=False,
-            )
-        )
-
-    # 3) colored on top
-    if not colored.empty:
-        fig.add_trace(
-            go.Scattergl(
-                x=colored["logP_top"],
-                y=colored["logP_bottom"],
-                mode="markers",
-                marker=dict(
-                    symbol="circle",
-                    color=info["color"],
-                    line=dict(color="white", width=1),
-                    opacity=1.0,
-                    size=colored["size"],
-                ),
-                text=colored["tooltip"],
-                hovertemplate="%{text}<extra></extra>",
-                showlegend=False,
-            )
-        )
-
-    idx_label = str(info["index_label"]).strip()
-    idx_df = merged[merged["DISPLAY_ID_top"].astype(str) == idx_label].copy()
-    if idx_df.empty:
-        idx_df = merged[merged["DISPLAY_ID_bottom"].astype(str) == idx_label].copy()
-
-    if not idx_df.empty:
-        idx_in_ref = bool(idx_df["in_ref"].fillna(False).iloc[0])
-        if idx_in_ref:
-            fig.add_trace(
-                go.Scattergl(
-                    x=idx_df["logP_top"],
-                    y=idx_df["logP_bottom"],
-                    mode="markers",
-                    marker=dict(
-                        symbol="diamond",
-                        color=info["color"],
-                        line=dict(color="black", width=2),
-                        size=22,
-                        opacity=1.0
-                    ),
-                    text=[f"Index SNP: {idx_label}"] * len(idx_df),
-                    hovertemplate="%{text}<extra></extra>",
-                    showlegend=False
-                )
-            )
-        else:
-            fig.add_trace(
-                go.Scattergl(
-                    x=idx_df["logP_top"],
-                    y=idx_df["logP_bottom"],
-                    mode="markers",
-                    marker=dict(
-                        symbol="x",
-                        color="#d9d9d9",
-                        size=4,
-                        line=dict(width=0),
-                        opacity=0.6,
-                    ),
-                    text=[f"{ld_labels['index_not_found']}: {idx_label}"] * len(idx_df),
-                    hovertemplate="%{text}<extra></extra>",
-                    showlegend=False
-                )
-            )
-
-    x_min = float(np.floor(np.nanmin(merged["logP_top"])))
-    x_max = float(np.ceil(np.nanmax(merged["logP_top"])))
-    y_min = float(np.floor(np.nanmin(merged["logP_bottom"])))
-    y_max = float(np.ceil(np.nanmax(merged["logP_bottom"])))
-
-    if x_max <= x_min:
-        x_max = x_min + 1
-    if y_max <= y_min:
-        y_max = y_min + 1
-
-    fig.update_xaxes(
-        title_text=f"-log10(P): {title_top}",
-        range=[x_min, x_max],
-        zeroline=False,
-        showgrid=False
-    )
-    fig.update_yaxes(
-        title_text=f"-log10(P): {title_bottom}",
-        range=[y_min, y_max],
-        zeroline=False,
-        showgrid=False
-    )
-
-    fig.update_layout(
-        title=dict(text=f"Locus compare ({signal})", x=0.5, xanchor="center"),
-        width=compare_size,
-        height=compare_size,
-        dragmode="zoom",
-        margin=dict(l=60, r=30, b=60, t=50),
-        showlegend=False
-    )
-
-    return fig, len(merged)
 
 
 def _add_compare_panel(
@@ -4760,12 +4556,6 @@ def inject_locusblend_css():
         }
 
         /* Keep the actual collapse button hidden. */
-        [data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"],
-        [data-testid="stSidebar"] [data-testid="stSidebarHeader"] [data-testid="stSidebarCollapseButton"] {
-            display: none !important;
-            visibility: hidden !important;
-            pointer-events: none !important;
-        }
 
         /* Do not change the global WashU header or Streamlit main/header layers here. */
 
@@ -4813,22 +4603,8 @@ def inject_locusblend_css():
         }
 
         /* Keep the empty Streamlit sidebar header compact. */
-        [data-testid="stSidebar"] [data-testid="stSidebarHeader"] {
-            height: 0 !important;
-            min-height: 0 !important;
-            max-height: 0 !important;
-            padding: 0 !important;
-            margin: 0 !important;
-            overflow: hidden !important;
-        }
 
         /* Keep the sidebar collapse button hidden for this review/demo build. */
-        [data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"],
-        [data-testid="stSidebar"] [data-testid="stSidebarHeader"] [data-testid="stSidebarCollapseButton"] {
-            display: none !important;
-            visibility: hidden !important;
-            pointer-events: none !important;
-        }
 
         /* --- Cleaner sidebar top label --- */
 
@@ -4863,22 +4639,8 @@ def inject_locusblend_css():
         }
 
         /* Keep the empty Streamlit sidebar header compact. */
-        [data-testid="stSidebar"] [data-testid="stSidebarHeader"] {
-            height: 0 !important;
-            min-height: 0 !important;
-            max-height: 0 !important;
-            padding: 0 !important;
-            margin: 0 !important;
-            overflow: hidden !important;
-        }
 
         /* Keep the sidebar collapse button hidden for this review/demo build. */
-        [data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"],
-        [data-testid="stSidebar"] [data-testid="stSidebarHeader"] [data-testid="stSidebarCollapseButton"] {
-            display: none !important;
-            visibility: hidden !important;
-            pointer-events: none !important;
-        }
 
         /* --- Top update button hint --- */
 
@@ -6136,7 +5898,7 @@ if (
 ):
     st.session_state["pending_locusblend_mode"] = st.session_state["active_locusblend_mode"]
 
-pending_mode = st.radio(
+st.radio(
     "Mode",
     _locusblend_modes,
     horizontal=True,
@@ -6224,7 +5986,7 @@ try:
         _matrix_widget = None
         _long_widget = None
         if pending_ld_source == "Use internal 1000G reference":
-            internal_1000g_ancestry = st.selectbox(
+            st.selectbox(
                 "1000G ancestry",
                 options=INTERNAL_1000G_ANCESTRY_OPTIONS,
                 index=INTERNAL_1000G_ANCESTRY_OPTIONS.index(
@@ -7069,7 +6831,6 @@ try:
         st.session_state["last_index_selection_method"] = index_selection_method
         st.session_state["last_ld_status_caption"] = ld_status_caption
         st.session_state["last_progress_success"] = "Plots updated successfully."
-        st.session_state["has_rendered_once"] = True
 
         update_progress(progress_bar, status_box, 100, "Done.")
         status_box.success(st.session_state["last_progress_success"])
