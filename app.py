@@ -50,6 +50,11 @@ from locusblend_web.variants import (
     resolve_index_variant_from_input,
 )
 
+from locusblend_web.genes import (
+    assign_gene_rows,
+    get_attr,
+)
+
 
 def log(msg):
     print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
@@ -91,11 +96,6 @@ def _read_recomb_track_bw(chrom, start, end, bw_path, n_bins=800):
     }).dropna()
 
     return rec
-
-
-def get_attr(attr, key):
-    m = re.search(fr'{key} "([^"]+)"', str(attr))
-    return m.group(1) if m else None
 
 
 @st.cache_data(show_spinner=False)
@@ -1319,32 +1319,6 @@ def load_genes_from_gtf(gtf_path, chrom, start, end, gene_display_mode="protein_
 
     log(f"load_genes_from_gtf done: n_genes={len(g)}")
     return g
-
-
-def assign_gene_rows(df, min_gap=30000):
-    if df.empty:
-        out = df.copy()
-        out["track_row"] = pd.Series(dtype=int)
-        return out
-
-    df = df.sort_values("start").copy()
-    row_ends = []
-    rows = []
-
-    for _, r in df.iterrows():
-        placed = False
-        for i in range(len(row_ends)):
-            if r["start"] > row_ends[i] + min_gap:
-                rows.append(i)
-                row_ends[i] = r["end"]
-                placed = True
-                break
-        if not placed:
-            rows.append(len(row_ends))
-            row_ends.append(r["end"])
-
-    df["track_row"] = rows
-    return df
 
 
 def add_gene_track_to_subplot(fig, genes_df, row, col=1, min_gap=30000, highlight_names=None):
