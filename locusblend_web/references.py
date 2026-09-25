@@ -7,7 +7,6 @@ static values in locusblend_web.config, not on Streamlit or runtime data.
 import glob
 import os
 import shutil
-import time
 
 import pandas as pd
 
@@ -18,11 +17,7 @@ from locusblend_web.config import (
     INTERNAL_1000G_DEFAULT_ANCESTRY,
     PROJECT_ROOT,
 )
-
-
-def log(msg):
-    """Print a timestamped message; mirrors app.py's log() to avoid a circular import."""
-    print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
+from locusblend_web.logutil import log
 
 
 def normalize_chrom(chrom):
@@ -92,7 +87,7 @@ def _normalize_bfile_prefix(p):
     return p
 
 
-def _resolve_bfile_prefix(bfile_prefix):
+def resolve_bfile_prefix(bfile_prefix):
     raw = str(bfile_prefix).strip()
     prefix = _normalize_bfile_prefix(raw)
 
@@ -134,7 +129,7 @@ def _resolve_bfile_prefix(bfile_prefix):
     )
 
 
-def _find_plink_exec(plink_path=str(BIN_DIR / "plink")):
+def find_plink_exec(plink_path=str(BIN_DIR / "plink")):
     candidates = [str(plink_path).strip(), str(BIN_DIR / "plink"), "./plink", "plink"]
     for c in candidates:
         if c and (os.path.exists(c) or shutil.which(c)):

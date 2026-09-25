@@ -1,6 +1,5 @@
 from io import BytesIO
 import re
-import time
 import traceback
 
 import numpy as np
@@ -31,7 +30,6 @@ from locusblend_web.references import (
 )
 
 from locusblend_web.variants import (
-    _clean_locus_df,
     attach_reference_snp_two_pass,
     attach_uploaded_ld_keys,
     chrom_mask,
@@ -61,6 +59,8 @@ from locusblend_web.ld import (
     read_reference_bim,
     run_plink_clump_for_auto_indices,
 )
+
+from locusblend_web.logutil import log
 
 from locusblend_web.plotting import (
     add_gene_track_to_subplot,
@@ -101,10 +101,6 @@ from locusblend_web.uploads import (
     read_locus_csv_uploaded,
     recommend_y_axis_max_for_dataset,
 )
-
-
-def log(msg):
-    print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
 
 
 @st.cache_data(show_spinner=False)

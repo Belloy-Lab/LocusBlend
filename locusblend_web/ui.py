@@ -7,18 +7,13 @@ and the page icon. They create Streamlit output but never touch session state.
 
 import base64
 import html as html_lib
-import time
 from mimetypes import guess_type
 
 import streamlit as st
 import streamlit.components.v1 as components
 
 from locusblend_web.config import ASSET_DIR
-
-
-def log(msg):
-    """Print a timestamped message; mirrors app.py's log() to avoid a circular import."""
-    print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
+from locusblend_web.logutil import log
 
 
 def update_progress(progress_bar, status_box, pct, msg):

@@ -7,25 +7,20 @@ temporary files, but they never touch Streamlit, session state, or the UI.
 import os
 import subprocess
 import tempfile
-import time
 from io import BytesIO
 
 import numpy as np
 import pandas as pd
 
 from locusblend_web.config import BIN_DIR, INTERNAL_1000G_DEFAULT_ANCESTRY
+from locusblend_web.logutil import log
 from locusblend_web.references import (
-    _find_plink_exec,
-    _resolve_bfile_prefix,
+    find_plink_exec,
     normalize_chrom,
     normalize_internal_1000g_ancestry,
+    resolve_bfile_prefix,
 )
 from locusblend_web.variants import chrom_mask, dedup_columns
-
-
-def log(msg):
-    """Print a timestamped message; mirrors app.py's log() to avoid a circular import."""
-    print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
 
 
 def parse_uploaded_ld_long(file_bytes, file_name):
@@ -258,8 +253,8 @@ def run_plink_clump_for_auto_indices(
     """Run PLINK --clump on the candidate list, returning up to max_indices
     independent lead SNPs (ranked by PLINK clump order)."""
     if plink_path is None:
-        plink_path = _find_plink_exec()
-    bfile_prefix = _resolve_bfile_prefix(bfile_prefix)
+        plink_path = find_plink_exec()
+    bfile_prefix = resolve_bfile_prefix(bfile_prefix)
     selected_chrom = normalize_chrom(selected_chrom)
 
     if candidates.empty:
@@ -432,7 +427,7 @@ def greedy_clump_uploaded_ld_for_auto_indices(
 
 
 def read_reference_bim(bfile_prefix):
-    bfile_prefix = _resolve_bfile_prefix(bfile_prefix)
+    bfile_prefix = resolve_bfile_prefix(bfile_prefix)
     bim_path = f"{bfile_prefix}.bim"
 
     log(f"Using BIM path: {bim_path}")
@@ -489,8 +484,8 @@ def build_ld_maps_with_plink(
     bim_loader lets the caller inject the app's cached BIM reader; when it is
     omitted, the uncached read_reference_bim is used.
     """
-    plink_exec = _find_plink_exec(plink_path)
-    bfile_prefix = _resolve_bfile_prefix(bfile_prefix)
+    plink_exec = find_plink_exec(plink_path)
+    bfile_prefix = resolve_bfile_prefix(bfile_prefix)
     chrom = normalize_chrom(chrom)
 
     load_bim = bim_loader or read_reference_bim

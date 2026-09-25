@@ -6,7 +6,6 @@ the cached wrappers and all session-state mutation stay in app.py.
 
 import hashlib
 import os
-import time
 from io import BytesIO
 
 import numpy as np
@@ -18,12 +17,8 @@ from locusblend_web.references import (
     get_supported_chromosomes,
     normalize_chrom,
 )
-from locusblend_web.variants import _clean_locus_df, chrom_mask
-
-
-def log(msg):
-    """Print a timestamped message; mirrors app.py's log() to avoid a circular import."""
-    print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
+from locusblend_web.logutil import log
+from locusblend_web.variants import clean_locus_df, chrom_mask
 
 
 def get_uploaded_summary_file_kind(file_name):
@@ -97,7 +92,7 @@ def read_locus_csv(path):
     log(f"loading csv from path: {path}")
     df = pd.read_csv(path)
     print("RAW COLUMNS:", [repr(c) for c in df.columns], flush=True)
-    df = _clean_locus_df(df, source_name=path)
+    df = clean_locus_df(df, source_name=path)
     log(f"{path} loaded, shape={df.shape}")
     return df
 
@@ -108,7 +103,7 @@ def read_locus_csv_uploaded(file_bytes, file_name):
     raw.name = file_name
     df = read_summary_stats_file(raw)
     print("RAW COLUMNS:", [repr(c) for c in df.columns], flush=True)
-    df = _clean_locus_df(df, source_name=file_name)
+    df = clean_locus_df(df, source_name=file_name)
     log(f"{file_name} loaded, shape={df.shape}")
     return df
 

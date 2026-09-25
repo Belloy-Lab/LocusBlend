@@ -13,7 +13,7 @@ def dedup_columns(df):
     return df.loc[:, ~pd.Index(df.columns).duplicated()].copy()
 
 
-def _clean_locus_df(df, source_name="uploaded data"):
+def clean_locus_df(df, source_name="uploaded data"):
     df = dedup_columns(df).copy()
 
     # ---------- normalize raw column names ----------

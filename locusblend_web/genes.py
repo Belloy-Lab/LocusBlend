@@ -6,17 +6,12 @@ state, the filesystem, or Plotly.
 """
 
 import re
-import time
 
 import pandas as pd
 
 from locusblend_web.config import GTF_COLS
+from locusblend_web.logutil import log
 from locusblend_web.references import normalize_chrom
-
-
-def log(msg):
-    """Print a timestamped message; mirrors app.py's log() to avoid a circular import."""
-    print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
 
 
 def get_attr(attr, key):
